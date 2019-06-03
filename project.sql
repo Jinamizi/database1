@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 01, 2019 at 09:02 AM
+-- Generation Time: Jun 03, 2019 at 05:23 PM
 -- Server version: 10.1.34-MariaDB
 -- PHP Version: 5.6.37
 
@@ -22,16 +22,74 @@ SET time_zone = "+00:00";
 -- Database: `project`
 --
 
+DELIMITER $$
+--
+-- Procedures
+--
+CREATE DEFINER=`root`@`localhost` PROCEDURE `check_balance` (IN `balance` DECIMAL(10,2))  begin
+if balance < 0 then
+signal sqlstate '45000'
+set message_text = 'check constraints.balance cannot be less than 0';
+end if;
+end$$
+
+CREATE DEFINER=`root`@`localhost` PROCEDURE `insert_into_logs` (IN `statement` TEXT)  begin
+insert into logs(action_time, action) values(now(),statement);
+end$$
+
+DELIMITER ;
+
 -- --------------------------------------------------------
 
 --
--- Table structure for table `balances`
+-- Table structure for table `accounts`
 --
 
-CREATE TABLE `balances` (
+CREATE TABLE `accounts` (
   `id_number` varchar(100) NOT NULL,
-  `balance` float NOT NULL DEFAULT '0'
+  `account_number` varchar(40) NOT NULL,
+  `balance` decimal(10,2) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+--
+-- Dumping data for table `accounts`
+--
+
+INSERT INTO `accounts` (`id_number`, `account_number`, `balance`) VALUES
+('33220327', 'A60', '0.00'),
+('34220328', 'A90', '0.00'),
+('33220330', 'B70', '0.00'),
+('33220326', 'B80', '0.00');
+
+--
+-- Triggers `accounts`
+--
+DELIMITER $$
+CREATE TRIGGER `accounts_ai` AFTER INSERT ON `accounts` FOR EACH ROW begin insert into logs (action_time, action) values(now(), concat(new.account_number, " created for ", new.id_number));end
+$$
+DELIMITER ;
+DELIMITER $$
+CREATE TRIGGER `accounts_au` AFTER UPDATE ON `accounts` FOR EACH ROW begin
+declare statement varchar(100);
+set @statement := new.id_number;
+if new.account_number <> old.account_number then
+set @statement := concat(statement, " updated ", old.account_number," to ",new.account_number);
+end if;
+if new.balance <> old.balance then
+set @statement := concat(statement, " updated ", old.balance," to ",new.balance);
+end if;
+call insert_into_logs(statement);
+end
+$$
+DELIMITER ;
+DELIMITER $$
+CREATE TRIGGER `accounts_bi` BEFORE INSERT ON `accounts` FOR EACH ROW call check_balance(new.balance)
+$$
+DELIMITER ;
+DELIMITER $$
+CREATE TRIGGER `accounts_bu` BEFORE UPDATE ON `accounts` FOR EACH ROW call check_balance(new.balance)
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -44,6 +102,25 @@ CREATE TABLE `details` (
   `first_name` varchar(100) NOT NULL DEFAULT 'N/A',
   `last_name` varchar(100) NOT NULL DEFAULT 'N/A'
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+--
+-- Dumping data for table `details`
+--
+
+INSERT INTO `details` (`id_number`, `first_name`, `last_name`) VALUES
+('33220326', 'sally', 'lango'),
+('33220327', 'sally', 'lango'),
+('33220330', 'sally', 'lango'),
+('34220328', 'tonny', 'lango');
+
+--
+-- Triggers `details`
+--
+DELIMITER $$
+CREATE TRIGGER `details_ai` AFTER INSERT ON `details` FOR EACH ROW begin
+insert into logs (action_time,action) values(now(),concat(new.id_number, " ", new.first_name, " ", new.last_name," added.")); end
+$$
+DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -63,9 +140,24 @@ CREATE TABLE `fingerprints` (
 --
 
 CREATE TABLE `logs` (
-  `date_time` datetime NOT NULL,
+  `action_time` text,
   `action` text
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+--
+-- Dumping data for table `logs`
+--
+
+INSERT INTO `logs` (`action_time`, `action`) VALUES
+('2019-06-01 15:28:29', '34220326 Tonny Lango added.'),
+('2019-06-01 15:58:52', 'A90 created for 34220326'),
+('2019-06-01 18:13:11', '34220326 tonny lango added.'),
+('2019-06-01 18:13:31', '33220326 sally lango added.'),
+('2019-06-01 18:13:44', '33220327 sally lango added.'),
+('2019-06-01 18:27:10', '33220330 sally lango added.'),
+('2019-06-01 18:27:40', 'B70 created for 33220330'),
+('2019-06-03 01:08:52', NULL),
+('2019-06-03 01:17:46', 'hi');
 
 -- --------------------------------------------------------
 
@@ -83,9 +175,10 @@ CREATE TABLE `passwords` (
 --
 
 --
--- Indexes for table `balances`
+-- Indexes for table `accounts`
 --
-ALTER TABLE `balances`
+ALTER TABLE `accounts`
+  ADD PRIMARY KEY (`account_number`),
   ADD KEY `id_number` (`id_number`);
 
 --
@@ -112,10 +205,10 @@ ALTER TABLE `passwords`
 --
 
 --
--- Constraints for table `balances`
+-- Constraints for table `accounts`
 --
-ALTER TABLE `balances`
-  ADD CONSTRAINT `balances_ibfk_1` FOREIGN KEY (`id_number`) REFERENCES `details` (`id_number`) ON UPDATE CASCADE;
+ALTER TABLE `accounts`
+  ADD CONSTRAINT `accounts_ibfk_1` FOREIGN KEY (`id_number`) REFERENCES `details` (`id_number`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `fingerprints`
