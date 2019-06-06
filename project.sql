@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 03, 2019 at 05:23 PM
+-- Generation Time: Jun 06, 2019 at 07:16 AM
 -- Server version: 10.1.34-MariaDB
 -- PHP Version: 5.6.37
 
@@ -65,6 +65,12 @@ INSERT INTO `accounts` (`id_number`, `account_number`, `balance`) VALUES
 -- Triggers `accounts`
 --
 DELIMITER $$
+CREATE TRIGGER `accounts_ad` AFTER DELETE ON `accounts` FOR EACH ROW BEGIN
+call insert_into_logs(concat("account ", old.account_number," for ",old.id_number," removed"));
+end
+$$
+DELIMITER ;
+DELIMITER $$
 CREATE TRIGGER `accounts_ai` AFTER INSERT ON `accounts` FOR EACH ROW begin insert into logs (action_time, action) values(now(), concat(new.account_number, " created for ", new.id_number));end
 $$
 DELIMITER ;
@@ -94,6 +100,20 @@ DELIMITER ;
 -- --------------------------------------------------------
 
 --
+-- Stand-in structure for view `customer_info`
+-- (See below for the actual view)
+--
+CREATE TABLE `customer_info` (
+`id_number` varchar(100)
+,`first_name` varchar(100)
+,`last_name` varchar(100)
+,`account_number` varchar(40)
+,`balance` decimal(10,2)
+);
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `details`
 --
 
@@ -117,8 +137,32 @@ INSERT INTO `details` (`id_number`, `first_name`, `last_name`) VALUES
 -- Triggers `details`
 --
 DELIMITER $$
+CREATE TRIGGER `details_ad` AFTER DELETE ON `details` FOR EACH ROW BEGIN
+call insert_into_logs(concat(old.id_number,' ',old.first_name,' ',old.last_name,' removed'));
+end
+$$
+DELIMITER ;
+DELIMITER $$
 CREATE TRIGGER `details_ai` AFTER INSERT ON `details` FOR EACH ROW begin
 insert into logs (action_time,action) values(now(),concat(new.id_number, " ", new.first_name, " ", new.last_name," added.")); end
+$$
+DELIMITER ;
+DELIMITER $$
+CREATE TRIGGER `details_au` AFTER UPDATE ON `details` FOR EACH ROW begin
+declare statement varchar(100);
+if new.id_number <> old.id_number then
+set @statement := concat(old.id_number, " updated to ", new.id_number);
+ELSE
+set @statement := concat("account for ", old.id_number);
+end if;
+if new.first_name <> old.first_name then
+set @statement := concat(statement, " updated ", old.first_name," to ",new.first_name);
+end if;
+if new.last_name <> old.last_name then
+set @statement := concat(statement, " updated ", old.last_name," to ",new.last_name);
+end if;
+call insert_into_logs(statement);
+end
 $$
 DELIMITER ;
 
@@ -169,6 +213,15 @@ CREATE TABLE `passwords` (
   `id_number` varchar(100) DEFAULT NULL,
   `password` varchar(100) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Structure for view `customer_info`
+--
+DROP TABLE IF EXISTS `customer_info`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `customer_info`  AS  select `details`.`id_number` AS `id_number`,`details`.`first_name` AS `first_name`,`details`.`last_name` AS `last_name`,`accounts`.`account_number` AS `account_number`,`accounts`.`balance` AS `balance` from (`details` join `accounts` on((`details`.`id_number` = `accounts`.`id_number`))) ;
 
 --
 -- Indexes for dumped tables
